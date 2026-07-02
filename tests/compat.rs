@@ -267,6 +267,87 @@ fn input_with_comments_and_blanks() {
     check(&r, &[("0", 1), ("1", 0), ("2", 1), ("3", 0), ("4", 1)]);
 }
 
+// ─── self-loops ──────────────────────────────────────────────────────────────
+// nx keeps a self-loop node and colors it (a self-loop never constrains a
+// node's own color); it also counts the loop as +2 in G.degree, which the
+// ordering strategies observe.
+
+#[test]
+fn selfloop_only_node_largest_first() {
+    let edges = "5 5";
+    let r = run(edges, Strategy::LargestFirst);
+    check(&r, &[("5", 0)]);
+}
+
+#[test]
+fn selfloop_only_node_dsatur() {
+    let edges = "5 5";
+    let r = run(edges, Strategy::SaturationLargestFirst);
+    check(&r, &[("5", 0)]);
+}
+
+#[test]
+fn selfloop_only_node_with_edge_largest_first() {
+    let edges = "0 1\n9 9";
+    let r = run(edges, Strategy::LargestFirst);
+    check(&r, &[("0", 0), ("1", 1), ("9", 0)]);
+    check_valid(&r, edges);
+}
+
+#[test]
+fn selfloop_only_node_with_edge_dsatur() {
+    let edges = "0 1\n9 9";
+    let r = run(edges, Strategy::SaturationLargestFirst);
+    check(&r, &[("0", 0), ("1", 1), ("9", 0)]);
+    check_valid(&r, edges);
+}
+
+// A self-loop bumps X's degree from 2 to 4, ordering it ahead of Y (degree 3);
+// ignoring the loop would flip X and Y's colors — this pins nx's degree rule.
+#[test]
+fn selfloop_degree_changes_final_colors_largest_first() {
+    let edges = "X Y\nX A\nY B\nY C\nX X";
+    let r = run(edges, Strategy::LargestFirst);
+    check(&r, &[("X", 0), ("Y", 1), ("A", 1), ("B", 0), ("C", 0)]);
+    check_valid(&r, edges);
+}
+
+#[test]
+fn selfloop_degree_changes_final_colors_dsatur() {
+    let edges = "X Y\nX A\nY B\nY C\nX X";
+    let r = run(edges, Strategy::SaturationLargestFirst);
+    check(&r, &[("X", 0), ("Y", 1), ("A", 1), ("B", 0), ("C", 0)]);
+    check_valid(&r, edges);
+}
+
+// ─── self-loop golden graph ──────────────────────────────────────────────────
+// Golden from: networkx 3.6.1, Python 3.12.13. 40-node random graph plus
+// three self-loop-only nodes (90/91/92) and self-loops injected on 3 and 7.
+
+#[test]
+fn selfloop_graph_largest_first() {
+    let edges = include_str!("golden/selfloop_edges.txt");
+    let r = run(edges, Strategy::LargestFirst);
+    let expected: HashMap<String, usize> = serde_json::from_str(
+        r#"{"15":0,"4":1,"34":2,"27":0,"5":1,"37":3,"7":1,"14":0,"38":2,"3":2,"10":1,"13":1,"29":0,"16":3,"35":2,"6":1,"32":0,"25":4,"24":0,"17":3,"0":4,"23":2,"12":3,"33":1,"8":1,"31":0,"20":0,"1":3,"26":2,"18":2,"9":3,"36":0,"2":1,"30":1,"28":0,"21":0,"19":1,"22":3,"11":2,"39":0,"90":0,"91":0,"92":0}"#,
+    )
+    .unwrap();
+    assert_eq!(r, expected);
+    check_valid(&r, edges);
+}
+
+#[test]
+fn selfloop_graph_dsatur() {
+    let edges = include_str!("golden/selfloop_edges.txt");
+    let r = run(edges, Strategy::SaturationLargestFirst);
+    let expected: HashMap<String, usize> = serde_json::from_str(
+        r#"{"15":0,"4":1,"34":2,"17":3,"12":3,"37":1,"5":2,"35":3,"16":1,"24":0,"0":4,"14":0,"38":2,"27":0,"10":3,"3":2,"7":1,"6":1,"25":3,"8":4,"13":1,"32":0,"23":2,"28":0,"33":1,"29":0,"9":4,"31":0,"1":4,"20":0,"26":2,"30":4,"18":1,"2":3,"21":0,"22":3,"36":0,"19":1,"11":2,"39":0,"90":0,"91":0,"92":0}"#,
+    )
+    .unwrap();
+    assert_eq!(r, expected);
+    check_valid(&r, edges);
+}
+
 // ─── parallel-edge dedup ─────────────────────────────────────────────────────
 
 #[test]

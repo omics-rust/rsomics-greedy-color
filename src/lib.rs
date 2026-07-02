@@ -40,24 +40,29 @@ impl Strategy {
     }
 }
 
-/// The graph: nodes interned to `0..n`, adjacency as `Vec<Vec<usize>>`.
+/// The graph: nodes interned to `0..n` in first-seen order.
 /// `names` maps intern index → original string name.
-/// `insertion_order` is the order nodes first appeared in the edge list.
+/// `adj` holds simple-graph adjacency (no self-edges, no parallel edges).
+/// `selfloop[i]` records whether node `i` carries a self-loop; nx counts a
+/// self-loop as +2 toward `G.degree`, which the ordering strategies observe.
 pub struct Graph {
     pub names: Vec<String>,
     pub adj: Vec<Vec<usize>>,
+    pub selfloop: Vec<bool>,
 }
 
 impl Graph {
     /// Parse an edge list where each line is `u v` (whitespace-separated).
     /// Lines starting with `#` or blank are skipped.
-    /// Parallel edges are deduplicated. Self-loops are ignored.
-    /// Isolated nodes (appearing on only one side of an edge, or standalone)
-    /// are not supported via this parser (the format has no standalone-node syntax).
+    /// Parallel edges are deduplicated. A self-loop (`u u`) registers the node
+    /// with no self-adjacency — matching nx, which keeps the node and colors it
+    /// (a self-loop never constrains a node's own color) while still counting
+    /// the loop twice in `G.degree`.
     pub fn from_edge_list(input: &str) -> Self {
         // IndexMap preserves insertion order, mirrors nx.Graph dict internals.
         let mut node_index: IndexMap<String, usize> = IndexMap::new();
         let mut edges: Vec<(usize, usize)> = Vec::new();
+        let mut selfloop_idx: std::collections::HashSet<usize> = std::collections::HashSet::new();
 
         for line in input.lines() {
             let line = line.trim();
@@ -73,11 +78,12 @@ impl Graph {
                 Some(s) => s,
                 None => continue, // single-token lines ignored
             };
-            if u == v {
-                continue; // self-loop
-            }
             let n = node_index.len();
             let ui = *node_index.entry(u.to_owned()).or_insert(n);
+            if u == v {
+                selfloop_idx.insert(ui);
+                continue;
+            }
             let n = node_index.len();
             let vi = *node_index.entry(v.to_owned()).or_insert(n);
             edges.push((ui, vi));
@@ -95,15 +101,21 @@ impl Graph {
             }
         }
 
-        Graph { names, adj }
+        let selfloop: Vec<bool> = (0..n).map(|i| selfloop_idx.contains(&i)).collect();
+        Graph {
+            names,
+            adj,
+            selfloop,
+        }
     }
 
     pub fn node_count(&self) -> usize {
         self.names.len()
     }
 
+    /// nx `G.degree`: incident edges, with a self-loop counted twice.
     pub fn degree(&self, node: usize) -> usize {
-        self.adj[node].len()
+        self.adj[node].len() + if self.selfloop[node] { 2 } else { 0 }
     }
 }
 
