@@ -53,7 +53,9 @@ pub struct Graph {
 
 impl Graph {
     /// Parse an edge list where each line is `u v` (whitespace-separated).
-    /// Lines starting with `#` or blank are skipped.
+    /// A `#` begins a comment anywhere in the line; text from the first `#` to
+    /// end-of-line is stripped before tokenising, so `1 2#note` yields edge
+    /// `(1, 2)` and a line that is all comment or blank is skipped.
     /// Parallel edges are deduplicated. A self-loop (`u u`) registers the node
     /// with no self-adjacency — matching nx, which keeps the node and colors it
     /// (a self-loop never constrains a node's own color) while still counting
@@ -65,8 +67,9 @@ impl Graph {
         let mut selfloop_idx: std::collections::HashSet<usize> = std::collections::HashSet::new();
 
         for line in input.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
+            // nx.parse_edgelist strips a '#' comment anywhere in the line before tokenising.
+            let line = line.split('#').next().unwrap_or("").trim();
+            if line.is_empty() {
                 continue;
             }
             let mut parts = line.split_whitespace();
@@ -231,4 +234,25 @@ fn greedy_saturation_largest_first(graph: &Graph) -> IndexMap<String, usize> {
         result.insert(name.clone(), colors[i].unwrap());
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn colored(input: &str) -> Vec<(String, usize)> {
+        let graph = Graph::from_edge_list(input);
+        let mut pairs: Vec<(String, usize)> = greedy_color(&graph, Strategy::LargestFirst)
+            .into_iter()
+            .collect();
+        pairs.sort();
+        pairs
+    }
+
+    #[test]
+    fn inline_hash_comment_matches_comment_free() {
+        let with_comment = "0 1\n1 2#c\n2 3\n0 #x\n";
+        let clean = "0 1\n1 2\n2 3\n";
+        assert_eq!(colored(with_comment), colored(clean));
+    }
 }
